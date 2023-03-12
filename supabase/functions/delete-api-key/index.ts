@@ -34,20 +34,35 @@ serve(async (req) => {
 
     if (!user) {
       return new Response(JSON.stringify({ error: "User not found." }), {
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 401,
       });
     }
 
-    // And we can run queries in the context of our authenticated user
-    const apikey = await generateApikey();
+    if (!req.body) {
+      return new Response(JSON.stringify({ error: "request body required" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+      });
+    }
+
+    const body = await req.json();
+    const apikey = body.apikey;
+
+    if (!apikey || apikey.length === 0) {
+      return new Response(JSON.stringify({ error: "apikey required" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+      });
+    }
 
     const { error } = await supabaseClient
       .from("apikeys")
-      .insert({ api_key: apikey, user_id: user.id });
+      .delete()
+      .eq("api_key", apikey);
     if (error) throw error;
 
-    return new Response(JSON.stringify({ apikey }), {
+    return new Response(JSON.stringify({ message: "delete success" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
@@ -58,19 +73,6 @@ serve(async (req) => {
     });
   }
 });
-
-async function generateApikey() {
-  const keyDefinition = await crypto.subtle.generateKey(
-    { name: "AES-GCM", length: 256 },
-    true,
-    ["encrypt", "decrypt"]
-  );
-
-  const keyObj = await crypto.subtle.exportKey("jwk", keyDefinition);
-  const apikey = keyObj.k;
-
-  return apikey;
-}
 
 // supabase secret:
 // Deno.env.get("SUPABASE_JWT_SECRET")
